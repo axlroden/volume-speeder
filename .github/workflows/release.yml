@@ -77,11 +77,7 @@ jobs:
           set -eu
           [ -d app/build/bin ] && rm -rf app/build/bin || true
           cd app
-          if [ "${{ matrix.target }}" = "macos-universal" ]; then
-            wails build -platform "${{ matrix.platform }}" -clean -package
-          else
-            wails build -platform "${{ matrix.platform }}" -clean
-          fi
+          wails build -platform "${{ matrix.platform }}" -clean
 
       - name: CLI build for Linux or no Wails config
         if: matrix.target == 'linux-amd64' || hashFiles('app/wails.json') == ''
