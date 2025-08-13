@@ -1,0 +1,180 @@
+name: Release Binaries (Linux/Windows/macOS)
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      build_only:
+        description: "Build only (upload as artifact instead of release asset)"
+        required: false
+        default: "false"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux-amd64
+            platform: linux/amd64
+          - os: windows-latest
+            target: windows-amd64
+            platform: windows/amd64
+          - os: macos-latest
+            target: macos-universal
+            platform: darwin/universal
+    env:
+      APP_NAME: ${{ github.event.repository.name }}
+      TAG: ${{ github.event.release.tag_name || github.ref_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.x'
+          check-latest: true
+
+      - name: Set up Node (for Wails frontend)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Linux dependencies (Wails)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libgtk-3-dev libwebkit2gtk-4.0-dev libglib2.0-dev libgdk-pixbuf-2.0-dev libpango1.0-dev libcairo2-dev librsvg2-dev
+
+      - name: Cache Go build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      - name: Frontend install (if present)
+        if: hashFiles('app/frontend/package.json') != ''
+        run: |
+          cd app/frontend
+          npm ci
+
+      - name: Build with Wails (GUI on Windows/macOS)
+        if: hashFiles('app/wails.json') != '' && matrix.target != 'linux-amd64'
+        shell: bash
+        run: |
+          set -eu
+          [ -d app/build/bin ] && rm -rf app/build/bin || true
+          cd app
+          if [ "${{ matrix.target }}" = "macos-universal" ]; then
+            wails build -platform "${{ matrix.platform }}" -clean -package
+          else
+            wails build -platform "${{ matrix.platform }}" -clean
+          fi
+
+      - name: CLI build for Linux or no Wails config
+        if: matrix.target == 'linux-amd64' || hashFiles('app/wails.json') == ''
+        shell: bash
+        run: |
+          set -eu
+          mkdir -p app/dist
+          if [ "${{ matrix.target }}" = "linux-amd64" ]; then
+            (cd app && GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o "dist/${APP_NAME}" .)
+          else
+            (cd app && GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o "dist/${APP_NAME}" .)
+          fi
+
+      - name: Package artifact
+        id: package
+        shell: bash
+        run: |
+          set -eu
+          OUTDIR="app/build/bin"
+          NAME="${APP_NAME}-${TAG}-${{ matrix.target }}"
+          if [ "${{ matrix.target }}" = "windows-amd64" ]; then
+            exe=$(find "$OUTDIR" -type f -name "*.exe" | head -n1 || true)
+            if [ -z "$exe" ] && [ -d app/dist ]; then exe=$(find app/dist -type f -name "*.exe" | head -n1 || true); fi
+            if [ -z "$exe" ]; then echo "No exe found"; exit 1; fi
+            NEWPATH="$OUTDIR/${NAME}.exe"
+            cp "$exe" "$NEWPATH"
+            echo "path=$NEWPATH" >> "$GITHUB_OUTPUT"
+            echo "name=${NAME}.exe" >> "$GITHUB_OUTPUT"
+          elif [ "${{ matrix.target }}" = "linux-amd64" ]; then
+            bin=$(find "$OUTDIR" -maxdepth 1 -type f -perm -111 ! -name "*.exe" | head -n1 || true)
+            if [ -z "$bin" ] && [ -d app/dist ]; then bin=$(find app/dist -maxdepth 1 -type f -perm -111 ! -name "*.exe" | head -n1 || true); fi
+            if [ -z "$bin" ]; then echo "No linux binary found"; exit 1; fi
+            TARPATH="$OUTDIR/${NAME}.tar.gz"
+            tar -C "$(dirname "$bin")" -czf "$TARPATH" "$(basename "$bin")"
+            echo "path=$TARPATH" >> "$GITHUB_OUTPUT"
+            echo "name=${NAME}.tar.gz" >> "$GITHUB_OUTPUT"
+          else
+            dmg=$(find "$OUTDIR" -type f -name "*.dmg" | head -n1 || true)
+            if [ -z "$dmg" ]; then
+              # fallback: zip the .app bundle if DMG not present
+              app=$(find "$OUTDIR" -type d -name "*.app" | head -n1 || true)
+              if [ -z "$app" ]; then echo "No macOS app/dmg found"; exit 1; fi
+              DMGPATH="$OUTDIR/${NAME}.zip"
+              (cd "$OUTDIR" && zip -qry "${NAME}.zip" "$(basename "$app")")
+              echo "path=$OUTDIR/${NAME}.zip" >> "$GITHUB_OUTPUT"
+              echo "name=${NAME}.zip" >> "$GITHUB_OUTPUT"
+            else
+              NEWPATH="$OUTDIR/${NAME}.dmg"
+              cp "$dmg" "$NEWPATH"
+              echo "path=$NEWPATH" >> "$GITHUB_OUTPUT"
+              echo "name=${NAME}.dmg" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
+      - name: Build NSIS installer (Windows)
+        if: matrix.target == 'windows-amd64'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          choco install nsis -y --no-progress
+          $payload = Join-Path $PWD 'installer\windows\payload'
+          if (Test-Path $payload) { Remove-Item -Recurse -Force $payload }
+          New-Item -ItemType Directory -Force -Path $payload | Out-Null
+          $exe = Get-ChildItem -Recurse -Filter *.exe -Path app/build/bin | Select-Object -First 1
+          if (-not $exe) { throw 'Executable not found for NSIS payload' }
+          $targetName = 'volume-speeder-gui.exe'
+          Copy-Item $exe.FullName -Destination (Join-Path $payload $targetName)
+          $nsi = 'installer/windows/volume-speeder.nsi'
+          & makensis /DOUTPUT_DIR="app/build/bin" $nsi
+          $installer = Join-Path $PWD 'VolumeSpeederSetup.exe'
+          if (Test-Path $installer) { Move-Item $installer (Join-Path 'app/build/bin' ("${{ env.APP_NAME }}-${{ env.TAG }}-windows-amd64-setup.exe")) -Force }
+
+      - name: Upload NSIS installer to Release
+        if: github.event_name == 'release' && matrix.target == 'windows-amd64' && (inputs.build_only != 'true')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: app/build/bin/${{ env.APP_NAME }}-${{ env.TAG }}-windows-amd64-setup.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifact (manual runs)
+        if: github.event_name == 'workflow_dispatch' && inputs.build_only == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.name }}
+          path: ${{ steps.package.outputs.path }}
+
+      - name: Upload asset to GitHub Release
+        if: github.event_name == 'release' && (inputs.build_only != 'true')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.package.outputs.path }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

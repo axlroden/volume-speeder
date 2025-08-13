@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Volume Speeder</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <meta name="description" content="Volume Speeder – speed up your media keys. GUI on Windows/macOS, simple CLI on Linux.">
+</head>
+<body class="bg-slate-950 text-slate-100">
+  <header class="max-w-4xl mx-auto px-4 py-8">
+  <h1 class="text-3xl font-semibold tracking-tight">Volume Speeder</h1>
+    <p class="mt-2 text-slate-300">Speed up your volume keys: repeat each press by N. Also works great for volume wheels that you feel are too slow, like the Lofree Keyboards. Elegant tray UI on Windows/macOS. Lightweight CLI on Linux.</p>
+    <div class="mt-4 flex flex-wrap gap-3">
+      <a id="latestRelease" href="#" target="_blank" class="inline-flex items-center rounded bg-indigo-600 px-4 py-2 text-sm font-medium hover:bg-indigo-500">Latest Release</a>
+      <a href="#install" class="inline-flex items-center rounded bg-slate-800 px-4 py-2 text-sm font-medium hover:bg-slate-700">Install</a>
+  <a href="https://github.com/axlroden/volume-speeder" target="_blank" class="inline-flex items-center rounded border border-slate-700 px-4 py-2 text-sm font-medium hover:bg-slate-800">GitHub</a>
+    </div>
+  </header>
+
+  <main class="max-w-4xl mx-auto px-4 pb-16">
+  <section class="grid md:grid-cols-3 gap-6">
+      <div class="rounded-lg bg-slate-900/60 p-5 ring-1 ring-slate-800">
+        <h3 class="font-medium">Windows</h3>
+        <p class="mt-1 text-sm text-slate-400">Wails GUI with tray icon, modern flyout, configurable multiplier.</p>
+        <div class="mt-3 space-y-2 text-sm">
+          <div>
+            <div class="text-slate-400">One-liner (user install):</div>
+            <pre class="mt-1 overflow-auto rounded bg-slate-900 p-3"><code>powershell -ExecutionPolicy Bypass -NoProfile -Command "iwr -useb https://raw.githubusercontent.com/axlroden/volume-speeder/HEAD/install.ps1 | iex"</code></pre>
+          </div>
+          <div>
+            <div class="text-slate-400">NSIS silent:</div>
+            <pre class="mt-1 overflow-auto rounded bg-slate-900 p-3"><code>VolumeSpeederSetup.exe /VERYSILENT /NORESTART</code></pre>
+          </div>
+        </div>
+      </div>
+      <div class="rounded-lg bg-slate-900/60 p-5 ring-1 ring-slate-800">
+        <h3 class="font-medium">macOS</h3>
+        <p class="mt-1 text-sm text-slate-400">Wails GUI app bundle. Unsigned (no Apple Developer ID), so Gatekeeper may warn.</p>
+        <div class="mt-3 space-y-2 text-sm">
+          <div class="text-slate-400">One-liner (auto-trust):</div>
+          <pre class="mt-1 overflow-auto rounded bg-slate-900 p-3"><code>sh -c "TRUST=1 $(curl -fsSL https://raw.githubusercontent.com/axlroden/volume-speeder/HEAD/install.sh)"</code></pre>
+          <div class="text-slate-400">Or run without trust, then open manually:</div>
+          <pre class="mt-1 overflow-auto rounded bg-slate-900 p-3"><code>sh -c "$(curl -fsSL https://raw.githubusercontent.com/axlroden/volume-speeder/HEAD/install.sh)"
+# Then: right-click Volume Speeder in /Applications → Open → Open</code></pre>
+        </div>
+      </div>
+      <div class="rounded-lg bg-slate-900/60 p-5 ring-1 ring-slate-800">
+        <h3 class="font-medium">Linux</h3>
+  <p class="mt-1 text-sm text-slate-400">Tiny CLI with config at <code>~/.config/volume-speeder/config</code>.</p>
+        <div class="mt-3 space-y-2 text-sm">
+          <div class="text-slate-400">One-liner:</div>
+          <pre class="mt-1 overflow-auto rounded bg-slate-900 p-3"><code>sh -c "$(curl -fsSL https://raw.githubusercontent.com/axlroden/volume-speeder/HEAD/install.sh)"</code></pre>
+          <div class="text-slate-400">Examples:</div>
+          <pre class="mt-1 overflow-auto rounded bg-slate-900 p-3"><code>volume-speeder get
+volume-speeder set 5
+volume-speeder inc</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <section id="install" class="mt-12">
+      <h2 class="text-xl font-semibold">Install</h2>
+      <p class="mt-2 text-slate-300">Prefer the one-liners above, or download artifacts from the release page:</p>
+      <ul class="mt-3 list-disc pl-6 text-slate-300 text-sm">
+        <li>Windows: .exe and NSIS setup</li>
+        <li>macOS: .dmg (or .zip)</li>
+        <li>Linux: .tar.gz (amd64)</li>
+      </ul>
+    </section>
+
+    <section class="mt-12">
+      <h2 class="text-xl font-semibold">How it works</h2>
+  <p class="mt-2 text-slate-300">Windows/macOS provide a tray app that multiplies volume key presses. Linux keeps it simple: a CLI that stores your multiplier in <code>~/.config/volume-speeder/config</code>.</p>
+    </section>
+  </main>
+
+  <footer class="max-w-4xl mx-auto px-4 pb-12 text-sm text-slate-500">© <span id="year"></span> Volume Speeder</footer>
+
+  <script>
+    document.getElementById('year').textContent = new Date().getFullYear();
+    // Link to latest release
+  fetch('https://api.github.com/repos/axlroden/volume-speeder/releases/latest')
+      .then(r => r.json())
+      .then(j => {
+        const a = document.getElementById('latestRelease');
+        if (j && j.html_url) a.href = j.html_url;
+      }).catch(()=>{});
+  </script>
+</body>
+</html>
