@@ -40,6 +40,7 @@ jobs:
     env:
       APP_NAME: ${{ github.event.repository.name }}
       TAG: ${{ github.event.release.tag_name || github.ref_name }}
+      BUILD_ONLY: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_only) || (github.event_name == 'workflow_call' && inputs.build_only) || 'false' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -159,7 +160,7 @@ jobs:
           if (Test-Path $installer) { Move-Item $installer (Join-Path 'app/build/bin' ("${{ env.APP_NAME }}-${{ env.TAG }}-windows-amd64-setup.exe")) -Force }
 
       - name: Upload NSIS installer to Release
-        if: github.event_name == 'release' && matrix.target == 'windows-amd64'
+        if: github.event_name == 'release' && matrix.target == 'windows-amd64' && env.BUILD_ONLY != 'true'
         uses: softprops/action-gh-release@v2
         with:
           files: app/build/bin/${{ env.APP_NAME }}-${{ env.TAG }}-windows-amd64-setup.exe
@@ -167,14 +168,14 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload artifact (manual runs)
-        if: github.event_name == 'workflow_dispatch' && inputs.build_only == 'true'
+        if: env.BUILD_ONLY == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.package.outputs.name }}
           path: ${{ steps.package.outputs.path }}
 
       - name: Upload asset to GitHub Release
-        if: github.event_name == 'release'
+        if: github.event_name == 'release' && env.BUILD_ONLY != 'true'
         uses: softprops/action-gh-release@v2
         with:
           files: ${{ steps.package.outputs.path }}
