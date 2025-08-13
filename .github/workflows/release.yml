@@ -9,6 +9,13 @@ on:
         description: "Build only (upload as artifact instead of release asset)"
         required: false
         default: "false"
+  workflow_call:
+    inputs:
+      build_only:
+        description: "Build only (upload as artifact instead of release asset)"
+        required: false
+        type: string
+        default: "false"
 
 permissions:
   contents: write
