@@ -51,13 +51,7 @@ jobs:
           go-version: '1.22.x'
           check-latest: true
 
-      - name: Set up Node (for Wails frontend)
-        if: hashFiles('app/wails.json') != '' && matrix.target != 'linux-amd64'
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      # Linux GUI deps are not required because Linux build is CLI-only
+  # No Node/Wails needed; Linux is CLI and Windows/macOS are pure Go builds
 
       - name: Cache Go build
         uses: actions/cache@v4
@@ -69,24 +63,17 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
 
-      - name: Install Wails CLI
-        if: hashFiles('app/wails.json') != '' && matrix.target != 'linux-amd64'
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
-
-      - name: Frontend install (if present for GUI targets)
-        if: hashFiles('app/frontend/package.json') != '' && matrix.target != 'linux-amd64'
-        run: |
-          cd app/frontend
-          npm ci
-
-      - name: Build with Wails (GUI on Windows/macOS)
-        if: hashFiles('app/wails.json') != '' && matrix.target != 'linux-amd64'
+      - name: Build binaries (Go)
         shell: bash
         run: |
           set -eu
-          [ -d app/build/bin ] && rm -rf app/build/bin || true
-          cd app
-          wails build -platform "${{ matrix.platform }}" -clean
+          mkdir -p app/build/bin
+          if [ "${{ matrix.target }}" = "linux-amd64" ]; then
+            (cd app && GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o build/bin/${APP_NAME} .)
+          else
+            # Native build for Windows/macOS (CGO enabled for GUI frameworks)
+            (cd app && go build -trimpath -ldflags "-s -w" -o build/bin/${APP_NAME}$( [ "${{ matrix.target }}" = "windows-amd64" ] && echo .exe || true ) .)
+          fi
 
       - name: CLI build for Linux or no Wails config
         if: matrix.target == 'linux-amd64' || hashFiles('app/wails.json') == ''
@@ -110,7 +97,6 @@ jobs:
           NAME="${APP_NAME}-${TAG}-${{ matrix.target }}"
           if [ "${{ matrix.target }}" = "windows-amd64" ]; then
             exe=$(find "$OUTDIR" -type f -name "*.exe" | head -n1 || true)
-            if [ -z "$exe" ] && [ -d app/dist ]; then exe=$(find app/dist -type f -name "*.exe" | head -n1 || true); fi
             if [ -z "$exe" ]; then echo "No exe found"; exit 1; fi
             NEWPATH="$OUTDIR/${NAME}.exe"
             cp "$exe" "$NEWPATH"
@@ -118,27 +104,18 @@ jobs:
             echo "name=${NAME}.exe" >> "$GITHUB_OUTPUT"
           elif [ "${{ matrix.target }}" = "linux-amd64" ]; then
             bin=$(find "$OUTDIR" -maxdepth 1 -type f -perm -111 ! -name "*.exe" | head -n1 || true)
-            if [ -z "$bin" ] && [ -d app/dist ]; then bin=$(find app/dist -maxdepth 1 -type f -perm -111 ! -name "*.exe" | head -n1 || true); fi
             if [ -z "$bin" ]; then echo "No linux binary found"; exit 1; fi
             TARPATH="$OUTDIR/${NAME}.tar.gz"
             tar -C "$(dirname "$bin")" -czf "$TARPATH" "$(basename "$bin")"
             echo "path=$TARPATH" >> "$GITHUB_OUTPUT"
             echo "name=${NAME}.tar.gz" >> "$GITHUB_OUTPUT"
           else
-            dmg=$(find "$OUTDIR" -type f -name "*.dmg" | head -n1 || true)
-            if [ -z "$dmg" ]; then
-              # fallback: zip the .app bundle if DMG not present
-              app=$(find "$OUTDIR" -type d -name "*.app" | head -n1 || true)
-              if [ -z "$app" ]; then echo "No macOS app/dmg found"; exit 1; fi
-              (cd "$OUTDIR" && zip -qry "${NAME}.zip" "$(basename "$app")")
-              echo "path=$OUTDIR/${NAME}.zip" >> "$GITHUB_OUTPUT"
-              echo "name=${NAME}.zip" >> "$GITHUB_OUTPUT"
-            else
-              NEWPATH="$OUTDIR/${NAME}.dmg"
-              cp "$dmg" "$NEWPATH"
-              echo "path=$NEWPATH" >> "$GITHUB_OUTPUT"
-              echo "name=${NAME}.dmg" >> "$GITHUB_OUTPUT"
-            fi
+            # Zip the macOS binary
+            bin=$(find "$OUTDIR" -maxdepth 1 -type f -perm -111 ! -name "*.exe" | head -n1 || true)
+            if [ -z "$bin" ]; then echo "No macOS binary found"; exit 1; fi
+            (cd "$OUTDIR" && zip -qry "${NAME}.zip" "$(basename "$bin")")
+            echo "path=$OUTDIR/${NAME}.zip" >> "$GITHUB_OUTPUT"
+            echo "name=${NAME}.zip" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Build NSIS installer (Windows)

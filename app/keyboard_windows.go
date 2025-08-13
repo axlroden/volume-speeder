@@ -60,7 +60,7 @@ func (a *App) startKeyboardHook() {
                 return 1 // Block original key press
             }
         }
-    ret, _, _ := callNextHookEx.Call(0, uintptr(nCode), wParam, lParam)
+        ret, _, _ := callNextHookEx.Call(0, uintptr(nCode), wParam, lParam)
         return ret
     }
 

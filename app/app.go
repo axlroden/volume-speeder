@@ -6,8 +6,6 @@ import (
 	"context"
 	"log"
 	"sync/atomic"
-
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // App holds application state
@@ -22,8 +20,14 @@ func NewApp() *App { return &App{} }
 // startup is called when the app starts.
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
-	// Set a default multiplier value on startup.
-	a.volumeMultiplier.Store(3)
+	// Load multiplier from config or default to 3.
+	if cfg, err := loadConfig(); err == nil && cfg.Multiplier >= 1 {
+		a.volumeMultiplier.Store(int32(cfg.Multiplier))
+	} else {
+		a.volumeMultiplier.Store(3)
+	}
+	// Start tray (no-op on non-Windows)
+	a.startTray()
 }
 
 // domReady is called after the DOM has been loaded.
@@ -33,10 +37,7 @@ func (a *App) domReady(ctx context.Context) {
 }
 
 // showWindow is called when the systray icon is left-clicked.
-func (a *App) showWindow() {
-	runtime.WindowShow(a.ctx)
-	runtime.WindowSetPosition(a.ctx, -1, -1) // Position relative to cursor
-}
+func (a *App) showWindow() {}
 
 // GetInitialMultiplier returns the current multiplier value to the frontend.
 func (a *App) GetInitialMultiplier() int {
@@ -47,11 +48,8 @@ func (a *App) GetInitialMultiplier() int {
 func (a *App) SetMultiplier(value int) {
 	log.Printf("Multiplier set to: %d\n", value)
 	a.volumeMultiplier.Store(int32(value))
+	_ = saveConfig(Config{Multiplier: int(a.volumeMultiplier.Load())})
 }
 
 // Quit closes the application via Wails runtime
-func (a *App) Quit() {
-	if a.ctx != nil {
-		runtime.Quit(a.ctx)
-	}
-}
+func (a *App) Quit() {}
