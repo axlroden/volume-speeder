@@ -43,15 +43,12 @@ jobs:
           check-latest: true
 
       - name: Set up Node (for Wails frontend)
+        if: hashFiles('app/wails.json') != '' && matrix.target != 'linux-amd64'
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Install Linux dependencies (Wails)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential libgtk-3-dev libwebkit2gtk-4.0-dev libglib2.0-dev libgdk-pixbuf-2.0-dev libpango1.0-dev libcairo2-dev librsvg2-dev
+      # Linux GUI deps are not required because Linux build is CLI-only
 
       - name: Cache Go build
         uses: actions/cache@v4
@@ -64,10 +61,11 @@ jobs:
             ${{ runner.os }}-go-
 
       - name: Install Wails CLI
+        if: hashFiles('app/wails.json') != '' && matrix.target != 'linux-amd64'
         run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
-      - name: Frontend install (if present)
-        if: hashFiles('app/frontend/package.json') != ''
+      - name: Frontend install (if present for GUI targets)
+        if: hashFiles('app/frontend/package.json') != '' && matrix.target != 'linux-amd64'
         run: |
           cd app/frontend
           npm ci
@@ -97,12 +95,13 @@ jobs:
             (cd app && GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o "dist/${APP_NAME}" .)
           fi
 
-      - name: Package artifact
+    - name: Package artifact
         id: package
         shell: bash
         run: |
           set -eu
-          OUTDIR="app/build/bin"
+      OUTDIR="app/build/bin"
+      mkdir -p "$OUTDIR"
           NAME="${APP_NAME}-${TAG}-${{ matrix.target }}"
           if [ "${{ matrix.target }}" = "windows-amd64" ]; then
             exe=$(find "$OUTDIR" -type f -name "*.exe" | head -n1 || true)
