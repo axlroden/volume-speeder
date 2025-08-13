@@ -1,13 +1,10 @@
-//go:build windows
+//go:build ignore
 
 package main
 
 import (
     "github.com/wailsapp/wails/v2/pkg/options"
     "github.com/wailsapp/wails/v2/pkg/options/assetserver"
-    "github.com/wailsapp/wails/v2/pkg/menu"
-    "github.com/wailsapp/wails/v2/pkg/menu/keys"
-    icon "github.com/axlroden/volume-speeder/app/src/icon"
 )
 
 func getAppOptions(app *App) *options.App {
@@ -22,15 +19,5 @@ func getAppOptions(app *App) *options.App {
         OnStartup:        app.startup,
         OnDomReady:       app.domReady,
         Bind: []interface{}{ app },
-        SystemTray: &options.SystemTray{
-            Icon:    icon.Data,
-            Title:   "Volume Speeder",
-            Tooltip: "Volume Speeder",
-            Menu: menu.NewMenuFromItems(
-                menu.Separator(),
-                menu.Text("Show", keys.None, func(_ *menu.CallbackData) { app.showWindow() }),
-                menu.Text("Quit", keys.None, func(_ *menu.CallbackData) { app.Quit() }),
-            ),
-        },
     }
 }

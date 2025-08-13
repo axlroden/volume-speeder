@@ -46,7 +46,7 @@ type keybdinput struct {
     DwExtraInfo uintptr
 }
 
-var hHook syscall.Handle
+var hHook uintptr
 
 func (a *App) startKeyboardHook() {
     // The keyboard hook callback needs to be a global function or a static method.
@@ -64,7 +64,8 @@ func (a *App) startKeyboardHook() {
         return ret
     }
 
-    hHook, _, _ = setWindowsHookEx.Call(whKeyboardLL, syscall.NewCallback(hookProc), 0, 0)
+    r1, _, _ := setWindowsHookEx.Call(uintptr(whKeyboardLL), syscall.NewCallback(hookProc), 0, 0)
+    hHook = r1
     if hHook == 0 {
         return
     }
@@ -72,7 +73,11 @@ func (a *App) startKeyboardHook() {
 
     // This message loop is necessary for the hook to receive events.
     var msg struct{}
-    for getMessage.Call(uintptr(unsafe.Pointer(&msg)), 0, 0, 0) != 0 {
+    for {
+        r, _, _ := getMessage.Call(uintptr(unsafe.Pointer(&msg)), 0, 0, 0)
+        if r == 0 || r == ^uintptr(0) { // 0 = WM_QUIT, ^0 = -1 error
+            break
+        }
     }
 }
 
