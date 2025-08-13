@@ -95,13 +95,13 @@ jobs:
             (cd app && GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o "dist/${APP_NAME}" .)
           fi
 
-    - name: Package artifact
+      - name: Package artifact
         id: package
         shell: bash
         run: |
           set -eu
-      OUTDIR="app/build/bin"
-      mkdir -p "$OUTDIR"
+          OUTDIR="app/build/bin"
+          mkdir -p "$OUTDIR"
           NAME="${APP_NAME}-${TAG}-${{ matrix.target }}"
           if [ "${{ matrix.target }}" = "windows-amd64" ]; then
             exe=$(find "$OUTDIR" -type f -name "*.exe" | head -n1 || true)
@@ -125,7 +125,6 @@ jobs:
               # fallback: zip the .app bundle if DMG not present
               app=$(find "$OUTDIR" -type d -name "*.app" | head -n1 || true)
               if [ -z "$app" ]; then echo "No macOS app/dmg found"; exit 1; fi
-              DMGPATH="$OUTDIR/${NAME}.zip"
               (cd "$OUTDIR" && zip -qry "${NAME}.zip" "$(basename "$app")")
               echo "path=$OUTDIR/${NAME}.zip" >> "$GITHUB_OUTPUT"
               echo "name=${NAME}.zip" >> "$GITHUB_OUTPUT"
@@ -156,7 +155,7 @@ jobs:
           if (Test-Path $installer) { Move-Item $installer (Join-Path 'app/build/bin' ("${{ env.APP_NAME }}-${{ env.TAG }}-windows-amd64-setup.exe")) -Force }
 
       - name: Upload NSIS installer to Release
-        if: github.event_name == 'release' && matrix.target == 'windows-amd64' && (inputs.build_only != 'true')
+        if: github.event_name == 'release' && matrix.target == 'windows-amd64'
         uses: softprops/action-gh-release@v2
         with:
           files: app/build/bin/${{ env.APP_NAME }}-${{ env.TAG }}-windows-amd64-setup.exe
@@ -171,7 +170,7 @@ jobs:
           path: ${{ steps.package.outputs.path }}
 
       - name: Upload asset to GitHub Release
-        if: github.event_name == 'release' && (inputs.build_only != 'true')
+        if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
           files: ${{ steps.package.outputs.path }}
